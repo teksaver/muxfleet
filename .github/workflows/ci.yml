@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify:
+    name: Verify & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Always the latest stable Go: the tests validate each new release as it comes out.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          check-latest: true
+
+      - name: Check go.mod and go.sum are tidy
+        run: go mod tidy -diff
+
+      # The prj binary embedded in vps is generated, never committed (-trimpath: no builder paths).
+      - name: Generate the embedded prj (go generate ./cmd/vps)
+        run: |
+          go version
+          go generate ./cmd/vps
+
+      - name: Run unit tests
+        run: go test -v ./...
+
+      - name: Build prj (linux/amd64 and linux/arm64)
+        run: |
+          mkdir -p bin
+          GOOS=linux GOARCH=amd64 go build -trimpath -o bin/prj-linux-amd64 ./cmd/prj
+          GOOS=linux GOARCH=arm64 go build -trimpath -o bin/prj-linux-arm64 ./cmd/prj
+
+      - name: Build vps (darwin/amd64, darwin/arm64, linux/amd64, linux/arm64)
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -trimpath -o bin/vps-darwin-amd64 ./cmd/vps
+          GOOS=darwin GOARCH=arm64 go build -trimpath -o bin/vps-darwin-arm64 ./cmd/vps
+          GOOS=linux GOARCH=amd64 go build -trimpath -o bin/vps-linux-amd64 ./cmd/vps
+          GOOS=linux GOARCH=arm64 go build -trimpath -o bin/vps-linux-arm64 ./cmd/vps
